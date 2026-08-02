@@ -25,6 +25,11 @@ import logging
 import re
 import uuid
 from typing import Any, Optional
+from dotenv import load_dotenv
+
+
+# load dotenv here
+load_dotenv()
 
 from livekit import agents
 from livekit.agents import (
@@ -36,7 +41,7 @@ from livekit.agents import (
     cli,
     function_tool,
 )
-from livekit.plugins import deepgram, cartesia, silero, anthropic as lk_anthropic
+from livekit.plugins import deepgram, cartesia, silero, google as lk_google
 
 from config import (
     CallIntent,
@@ -542,10 +547,9 @@ async def entrypoint(job_ctx: JobContext) -> None:
         interim_results=True,
     )
 
-    llm_engine = lk_anthropic.LLM(
+    llm_engine = lk_google.LLM(
         model=LLM_SETTINGS.model,
         temperature=LLM_SETTINGS.temperature,
-        max_tokens=LLM_SETTINGS.max_tokens,
     )
 
     tts_engine = cartesia.TTS(
