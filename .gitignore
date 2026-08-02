@@ -1,0 +1,61 @@
+```gitignore
+# Environment variables and secrets
+.env
+.env.*
+!.env.example
+
+# Python virtual environments
+.venv/
+venv/
+env/
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Build and package files
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# Testing and coverage
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.nox/
+
+# Type checking and linting
+.mypy_cache/
+.ruff_cache/
+
+# IDE settings
+.vscode/
+.idea/
+
+# Operating system files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Temporary files
+*.tmp
+*.temp
+*.swp
+
+# LiveKit and local runtime files
+.livekit/
+recordings/
+downloads/
+
+# Local databases
+*.db
+*.sqlite
+*.sqlite3
+```
