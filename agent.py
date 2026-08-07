@@ -41,7 +41,7 @@ from livekit.agents import (
     cli,
     function_tool,
 )
-from livekit.plugins import deepgram, cartesia, silero, google as lk_google
+from livekit.plugins import deepgram, cartesia, silero, openai as lk_openai
 
 from config import (
     CallIntent,
@@ -533,6 +533,17 @@ async def entrypoint(job_ctx: JobContext) -> None:
     his_client = HISClient()
     session_state = HospitalCallSession(his_client)
 
+    # Cleanup must happen when the LiveKit JOB ends,
+    # not when entrypoint() returns.
+    async def cleanup() -> None:
+        await his_client.aclose()
+        logger.info(
+            "Session %s ended and resources released.",
+            session_state.ctx.session_id,
+        )
+
+    job_ctx.add_shutdown_callback(cleanup)
+
     # Default to English at greeting; the caller's first utterance / an
     # explicit language prompt can switch this via `set_call_intent`-adjacent
     # flow in a fuller implementation. Kept simple here per the FSM's
@@ -543,11 +554,11 @@ async def entrypoint(job_ctx: JobContext) -> None:
     stt_engine = deepgram.STT(
         model="nova-3-medical",
         language="en",
-        keyterms=STT_KEYTERMS_EN,
+        keyterm=STT_KEYTERMS_EN,
         interim_results=True,
     )
 
-    llm_engine = lk_google.LLM(
+    llm_engine = lk_openai.LLM(
         model=LLM_SETTINGS.model,
         temperature=LLM_SETTINGS.temperature,
     )
@@ -572,6 +583,12 @@ async def entrypoint(job_ctx: JobContext) -> None:
         vad=vad_engine,
     )
 
+    async def _guard_turn(state: HospitalCallSession, transcript: str) -> None:
+            try:
+                await state.guard_emergency(transcript)
+            except Exception:
+                logger.exception("Emergency guardrail check failed for session %s", state.ctx.session_id)
+
     @session.on("user_speech_committed")
     def _on_user_speech(msg: Any) -> None:
         # Run emergency-language guardrail on every committed user turn,
@@ -580,11 +597,7 @@ async def entrypoint(job_ctx: JobContext) -> None:
         transcript = getattr(msg, "text", "") or ""
         asyncio.create_task(_guard_turn(session_state, transcript))
 
-    async def _guard_turn(state: HospitalCallSession, transcript: str) -> None:
-        try:
-            await state.guard_emergency(transcript)
-        except Exception:
-            logger.exception("Emergency guardrail check failed for session %s", state.ctx.session_id)
+    
 
     try:
         await session.start(agent=agent, room=job_ctx.room)
@@ -596,11 +609,7 @@ async def entrypoint(job_ctx: JobContext) -> None:
             )
         )
 
-        # Keep the job alive until the room session ends; LiveKit's job
-        # lifecycle handles teardown on participant disconnect.
-        await job_ctx.wait_for_participant_disconnect() if hasattr(
-            job_ctx, "wait_for_participant_disconnect"
-        ) else await asyncio.Event().wait()
+        
 
     finally:
         # HIPAA zero-retention: ensure no session state or HIS client
@@ -613,4 +622,7 @@ async def entrypoint(job_ctx: JobContext) -> None:
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
-    cli.run_app(WorkerOptions(entrypoint_fnc=entrypoint))
+    cli.run_app(WorkerOptions(
+        entrypoint_fnc=entrypoint,
+        agent_name="hospital-voice-agent"
+        ))

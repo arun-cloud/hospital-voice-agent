@@ -233,7 +233,7 @@ VAD_SETTINGS = VADSettings()
 
 @dataclass(frozen=True)
 class LLMSettings:
-    model: str = "gemini-2.0-flash-001"
+    model: str = "gpt-4o-mini"
     temperature: float = 0.2
     max_tokens: int = 1024
     # Extended thinking is off by default for this model tier; kept explicit
