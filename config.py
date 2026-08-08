@@ -49,6 +49,8 @@ def _optional_env(key: str, default: str) -> str:
 class Language(str, Enum):
     ENGLISH = "en"
     ARABIC = "ar-SA"
+    MALAYALAM = "ml"
+    TAMIL = "ta"
 
 
 class CallIntent(str, Enum):
@@ -160,10 +162,76 @@ SYSTEM_PROMPT_AR = """أنتِ سارة، المساعدة الآلية لحجز
 - اللغة: العربية
 - حالة التحقق من المريض: {patient_status}
 """
+SYSTEM_PROMPT_ML = """നിങ്ങൾ {hospital_name}-ന്റെ ഓട്ടോമേറ്റഡ് അപ്പോയിന്റ്മെന്റ് അസിസ്റ്റന്റായ സാറയാണ്.
+
+വ്യക്തമായും സൗഹൃദപരമായും ചുരുക്കമായും സംസാരിക്കുക.
+
+STRICT RULES:
+1. HIS tools നൽകാത്ത appointment, doctor, patient വിവരങ്ങൾ ഒരിക്കലും സൃഷ്ടിക്കരുത്.
+2. Appointment വിവരങ്ങൾ പറയുന്നതിന് മുമ്പ് patient verification നടത്തണം.
+3. ഒരേസമയം പരമാവധി 3 appointment slots മാത്രം നൽകുക.
+4. Booking, reschedule അല്ലെങ്കിൽ cancellation നടത്തുന്നതിന് മുമ്പ് caller-ന്റെ വ്യക്തമായ confirmation വാങ്ങണം.
+5. Medical emergency സൂചിപ്പിച്ചാൽ booking flow നിർത്തി escalation നടത്തണം.
+6. Caller human agent ആവശ്യപ്പെട്ടാൽ ഉടൻ escalation നടത്തണം.
+7. ഒരേസമയം ഒരു ചോദ്യം മാത്രം ചോദിക്കുക.
+8. Medical advice അല്ലെങ്കിൽ diagnosis നൽകരുത്.
+
+Current call context:
+- Hospital: {hospital_name}
+- Language: Malayalam
+- Verified patient: {patient_status}
+"""
+
+SYSTEM_PROMPT_TA = """நீங்கள் {hospital_name}-ன் தானியங்கி அப்பாயிண்ட்மெண்ட் உதவியாளர் சாரா.
+
+தெளிவாகவும் நட்பாகவும் சுருக்கமாகவும் பேசுங்கள்.
+
+STRICT RULES:
+1. HIS tools வழங்காத appointment, doctor அல்லது patient தகவல்களை உருவாக்கக்கூடாது.
+2. Appointment தகவலை வழங்குவதற்கு முன் patient verification செய்ய வேண்டும்.
+3. ஒரே நேரத்தில் அதிகபட்சம் 3 appointment slots மட்டும் வழங்கவும்.
+4. Booking, reschedule அல்லது cancellation செய்வதற்கு முன் caller-இன் தெளிவான confirmation பெற வேண்டும்.
+5. Medical emergency குறிப்பிடப்பட்டால் booking flow-ஐ நிறுத்தி escalation செய்ய வேண்டும்.
+6. Caller human agent கேட்டால் உடனடியாக escalation செய்ய வேண்டும்.
+7. ஒரே நேரத்தில் ஒரு கேள்வி மட்டும் கேட்கவும்.
+8. Medical advice அல்லது diagnosis வழங்கக்கூடாது.
+
+Current call context:
+- Hospital: {hospital_name}
+- Language: Tamil
+- Verified patient: {patient_status}
+"""
 
 SYSTEM_PROMPTS: dict[Language, str] = {
     Language.ENGLISH: SYSTEM_PROMPT_EN,
     Language.ARABIC: SYSTEM_PROMPT_AR,
+    Language.MALAYALAM: SYSTEM_PROMPT_ML,
+    Language.TAMIL: SYSTEM_PROMPT_TA,
+}
+
+LANGUAGE_SELECTION_PROMPT = (
+    "Welcome to {hospital_name}. "
+    "Please choose your preferred language. "
+    "English, Arabic, Malayalam, or Tamil."
+)
+
+LANGUAGE_ALIASES: dict[str, Language] = {
+    # English
+    "english": Language.ENGLISH,
+    "eng": Language.ENGLISH,
+
+    # Arabic
+    "arabic": Language.ARABIC,
+    "عربي": Language.ARABIC,
+    "العربية": Language.ARABIC,
+
+    # Malayalam
+    "malayalam": Language.MALAYALAM,
+    "മലയാളം": Language.MALAYALAM,
+
+    # Tamil
+    "tamil": Language.TAMIL,
+    "தமிழ்": Language.TAMIL,
 }
 
 EMERGENCY_KEYWORDS: dict[Language, list[str]] = {
@@ -264,6 +332,14 @@ TTS_VOICES: dict[Language, TTSVoiceConfig] = {
         voice_id=_optional_env("CARTESIA_VOICE_ID_AR_SA", "REPLACE_WITH_SAUDI_ARABIC_VOICE_ID"),
         language="ar",
     ),
+    Language.MALAYALAM: TTSVoiceConfig(
+            voice_id=_optional_env("CARTESIA_VOICE_ID_ML", "b426013c-002b-4e89-8874-8cd20b68373a"),
+            language="ml",
+        ),
+    Language.TAMIL: TTSVoiceConfig(
+            voice_id=_optional_env("CARTESIA_VOICE_ID_TA", "19f28c21-ae34-499f-b64a-f7b09cd9b516"),
+            language="ta",
+        ),
 }
 
 

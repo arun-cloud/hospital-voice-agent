@@ -57,6 +57,7 @@ from config import (
     TTS_VOICES,
     VAD_SETTINGS,
     load_notification_config,
+    LANGUAGE_ALIASES
 )
 from escalation import EscalationEngine
 from his_client import HISClient
@@ -65,6 +66,20 @@ from state_machine import CallContext, HospitalFSM, new_call_context
 logger = logging.getLogger("agent")
 
 MOBILE_RE = re.compile(r"^(?:\+?966|0)?5\d{8}$")  # Saudi mobile format
+
+
+# --------------------------------------------------------------------------- #
+# Language selection
+# --------------------------------------------------------------------------- #
+
+def handle_language_selection(user_text: str) -> Language | None:
+    normalized = user_text.strip().lower()
+
+    for phrase, language in LANGUAGE_ALIASES.items():
+        if phrase.lower() in normalized:
+            return language
+
+    return None
 
 
 # --------------------------------------------------------------------------- #
@@ -549,7 +564,7 @@ async def entrypoint(job_ctx: JobContext) -> None:
     # flow in a fuller implementation. Kept simple here per the FSM's
     # LANGUAGE_CONFIRM state, which agent.py drives via STT language hint.
     initial_language = Language.ENGLISH
-    session_state.ctx = session_state.fsm.set_language(session_state.ctx, initial_language)
+    # session_state.ctx = session_state.fsm.set_language(session_state.ctx, initial_language)
 
     stt_engine = deepgram.STT(
         model="nova-3-medical",
@@ -603,9 +618,10 @@ async def entrypoint(job_ctx: JobContext) -> None:
         await session.start(agent=agent, room=job_ctx.room)
         await session.generate_reply(
             instructions=(
-                "Greet the caller warmly, identify yourself as the hospital's automated "
-                "appointment assistant, and ask how you can help today (new appointment, "
-                "check an existing appointment, reschedule, cancel, or new patient registration)."
+                f"Welcome the caller to {HOSPITAL_NAME}. "
+                "Do not ask about appointments yet. "
+                "Ask the caller to choose their preferred language: "
+                "English, Arabic, Malayalam, or Tamil."
             )
         )
 
