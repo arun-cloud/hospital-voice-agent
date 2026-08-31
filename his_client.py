@@ -212,6 +212,8 @@ class HISClient:
         """Look up a registered patient by mobile number, optionally
         disambiguated by national ID / Iqama when multiple records share a
         mobile number (family-shared phones are common)."""
+        print("Reached Verify Patients");
+        
         return await self._request(
             "POST",
             "/api/v1/patients/verify",

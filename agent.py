@@ -154,6 +154,76 @@ class HospitalAgent(Agent):
         )
         super().__init__(instructions=instructions)
 
+
+
+          # -------------------------------------------------------------------
+    # Language selection
+    # -------------------------------------------------------------------
+
+    @function_tool()
+    async def select_language_tool(
+        self,
+        run_ctx: RunContext,
+        language: str,
+    ) -> str:
+        """
+        Select the caller's preferred language.
+
+        Args:
+            language: The requested language.
+                Supported values are English, Arabic, Malayalam, or Tamil.
+        """
+
+        selected_language = handle_language_selection(language)
+
+        if selected_language is None:
+            return (
+                "Unsupported language. Ask the caller to choose "
+                "English, Arabic, Malayalam, or Tamil."
+            )
+
+        # Update FSM
+        self.state._set(
+            self.state.fsm.set_language(
+                self.state.ctx,
+                selected_language,
+            )
+        )
+
+        # Change TTS voice/language
+        voice_config = TTS_VOICES[selected_language]
+
+        if self.session.tts is not None:
+            self.session.tts.update_options(
+                language=voice_config.language,
+                voice=voice_config.voice_id,
+            )
+
+        # Change agent/system prompt
+        await self.update_instructions(
+            SYSTEM_PROMPTS[selected_language].format(
+                hospital_name=HOSPITAL_NAME,
+                patient_status=(
+                    "verified"
+                    if self.state.ctx.is_verified
+                    else "not yet verified"
+                ),
+            )
+        )
+
+        logger.info(
+            "Session %s language changed to %s",
+            self.state.ctx.session_id,
+            selected_language.value,
+        )
+
+        return (
+            f"Language successfully changed to "
+            f"{selected_language.name}. "
+            "Continue speaking in that language and ask "
+            "what the caller would like help with."
+        )
+
     # ------------------------------------------------------------------- #
     # Identity & verification
     # ------------------------------------------------------------------- #
@@ -194,6 +264,7 @@ class HospitalAgent(Agent):
                 "That doesn't look like a valid Saudi mobile number. "
                 "Ask the caller to repeat their 10-digit mobile number."
             )
+        logger.info("Starting patient verification. state=%s",self.state.ctx.state.value,)
 
         new_ctx = await self.state.fsm.verify_patient(self.state.ctx, cleaned, national_id)
         self.state._set(new_ctx)
@@ -622,6 +693,8 @@ async def entrypoint(job_ctx: JobContext) -> None:
                 "Do not ask about appointments yet. "
                 "Ask the caller to choose their preferred language: "
                 "English, Arabic, Malayalam, or Tamil."
+                "When the caller chooses a language, you MUST call "
+                "select_language_tool before continuing the conversation."
             )
         )
 
