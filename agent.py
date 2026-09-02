@@ -190,6 +190,26 @@ class HospitalAgent(Agent):
             )
         )
 
+        # ------------------------------------------------------------
+        # Update STT
+        # ------------------------------------------------------------
+
+        if self.session.stt is not None:
+
+            if selected_language == Language.ENGLISH:
+                self.session.stt.update_options(
+                    model="nova-3-medical",
+                    language="en",
+                    keyterm=STT_KEYTERMS_EN,
+                )
+
+            elif selected_language == Language.ARABIC:
+                self.session.stt.update_options(
+                    model="nova-3",
+                    language="ar-SA",
+                    keyterm=STT_KEYTERMS_AR,
+                )
+
         # Change TTS voice/language
         voice_config = TTS_VOICES[selected_language]
 
@@ -218,11 +238,11 @@ class HospitalAgent(Agent):
         )
 
         return (
-            f"Language successfully changed to "
-            f"{selected_language.name}. "
-            "Continue speaking in that language and ask "
-            "what the caller would like help with."
-        )
+            f"Language changed to {selected_language.name}. "
+            "Ask the caller in the selected language what they would "
+            "like help with. Do not request the mobile number until "
+            "their intent has been identified and set_call_intent has "
+            "been called.")
 
     # ------------------------------------------------------------------- #
     # Identity & verification
