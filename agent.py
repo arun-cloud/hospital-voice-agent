@@ -725,7 +725,7 @@ async def entrypoint(job_ctx: JobContext) -> None:
         # resources leak past this call. `session_state.ctx` lives only in
         # process memory and is discarded when this worker process exits;
         # nothing here writes transcripts or PII to persistent disk.
-        await his_client.aclose()
+        #await his_client.aclose()
         logger.info("Session %s ended and resources released.", session_state.ctx.session_id)
 
 
