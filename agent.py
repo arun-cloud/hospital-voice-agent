@@ -31,6 +31,11 @@ from dotenv import load_dotenv
 # load dotenv here
 load_dotenv()
 
+import truststore
+
+truststore.inject_into_ssl()
+
+
 from livekit import agents
 from livekit.agents import (
     Agent,
@@ -309,7 +314,7 @@ class HospitalAgent(Agent):
         result = await self.state.his_client.list_departments()
         if not result.ok:
             return "Could not retrieve the department list right now. Offer to transfer to a receptionist."
-        depts = (result.data or {}).get("departments", [])
+        depts = result.data or []
         return "; ".join(f"{d['department_id']}:{d['name']}" for d in depts) or "No departments returned."
 
     @function_tool()
@@ -668,6 +673,24 @@ async def entrypoint(job_ctx: JobContext) -> None:
         model=LLM_SETTINGS.model,
         temperature=LLM_SETTINGS.temperature,
     )
+
+    @llm_engine.on("error")
+    def _on_llm_error(ev: Any) -> None:
+        # LiveKit wraps any transport failure as a generic "Connection error.";
+        # log the underlying exception chain (types + library messages only,
+        # never request payloads) so the real cause is visible.
+        chain = []
+        cause = ev.error.__cause__
+        while cause is not None and len(chain) < 5:
+            chain.append(f"{type(cause).__module__}.{type(cause).__name__}: {cause}")
+            cause = cause.__cause__ or cause.__context__
+        logger.warning(
+            "LLM error in session %s (recoverable=%s): %s | cause chain: %s",
+            session_state.ctx.session_id,
+            ev.recoverable,
+            type(ev.error).__name__,
+            " <- ".join(chain) or "none",
+        )
 
     tts_engine = cartesia.TTS(
         voice=TTS_VOICES[initial_language].voice_id,

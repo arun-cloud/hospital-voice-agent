@@ -11,3 +11,4 @@ httpx>=0.27.0
 
 # Runtime
 python-dotenv>=1.0.0
+truststore==0.10.4

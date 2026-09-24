@@ -50,12 +50,12 @@ class HISUnavailableError(Exception):
 @dataclass
 class HISResult:
     ok: bool
-    data: Optional[dict[str, Any]] = None
+    data: Any = None
     error_code: Optional[str] = None
     error_message: Optional[str] = None
 
     @staticmethod
-    def success(data: dict[str, Any]) -> "HISResult":
+    def success(data: Any) -> "HISResult":
         return HISResult(ok=True, data=data)
 
     @staticmethod
@@ -134,6 +134,9 @@ class HISClient:
             return token
 
     async def _auth_headers(self) -> dict[str, str]:
+        if not self._config.auth_enabled:
+            return {}
+
         token = await self._ensure_token()
         return {"Authorization": f"Bearer {token}"}
 
@@ -212,12 +215,12 @@ class HISClient:
         """Look up a registered patient by mobile number, optionally
         disambiguated by national ID / Iqama when multiple records share a
         mobile number (family-shared phones are common)."""
-        print("Reached Verify Patients");
+        logger.info("Calling HIS patient verification")
         
         return await self._request(
             "POST",
             "/api/v1/patients/verify",
-            json_body={"mobile": mobile, "national_id": national_id},
+            json_body={"mobile": mobile, "nationalId": national_id},
         )
 
     # ------------------------------------------------------------------- #
@@ -266,12 +269,12 @@ class HISClient:
         return await self._request(
             "POST",
             "/api/v1/slots/hold",
-            json_body={"slot_id": slot_id, "patient_id": patient_id},
+            json_body={"slotId": slot_id, "patientId": patient_id},
         )
 
     async def release_slot_hold(self, hold_id: str) -> HISResult:
         return await self._request(
-            "POST", "/api/v1/slots/release-hold", json_body={"hold_id": hold_id}
+            "POST", "/api/v1/slots/release-hold", json_body={"holdId": hold_id}
         )
 
     # ------------------------------------------------------------------- #
@@ -284,7 +287,7 @@ class HISClient:
         return await self._request(
             "POST",
             "/api/v1/appointments/book",
-            json_body={"hold_id": hold_id, "patient_id": patient_id},
+            json_body={"holdId": hold_id, "patientId": patient_id},
             idempotency_key=idempotency_key,
         )
 
@@ -301,7 +304,7 @@ class HISClient:
         return await self._request(
             "POST",
             "/api/v1/appointments/cancel",
-            json_body={"appointment_id": appointment_id, "reason": reason},
+            json_body={"appointmentId": appointment_id, "reason": reason},
             idempotency_key=idempotency_key,
         )
 
@@ -372,7 +375,7 @@ class HISClient:
         return await self._request(
             "POST",
             "/api/v1/auth/verify-otp",
-            json_body={"mobile": mobile, "otp_code": otp_code},
+            json_body={"mobile": mobile, "otpCode": otp_code},
         )
 
     async def check_duplicate_patient(
@@ -381,7 +384,7 @@ class HISClient:
         return await self._request(
             "POST",
             "/api/v1/patients/check-duplicate",
-            json_body={"mobile": mobile, "national_id": national_id},
+            json_body={"mobile": mobile, "nationalId": national_id},
         )
 
     async def create_patient(self, registration_payload: dict[str, Any]) -> HISResult:

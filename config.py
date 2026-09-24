@@ -352,6 +352,7 @@ class HISConfig:
     base_url: str
     client_id: str
     client_secret: str
+    auth_enabled: bool = False
     timeout_seconds: float = 6.0
     max_retries: int = 2
     retry_backoff_seconds: float = 0.75
@@ -365,6 +366,7 @@ def load_his_config() -> HISConfig:
         base_url=_require_env("HIS_API_BASE_URL").rstrip("/"),
         client_id=_require_env("HIS_API_CLIENT_ID"),
         client_secret=_require_env("HIS_API_CLIENT_SECRET"),
+        auth_enabled=os.getenv("HIS_AUTH_ENABLED", "false").lower() == "true",
         timeout_seconds=float(_optional_env("HIS_API_TIMEOUT_SECONDS", "6.0")),
         max_retries=int(_optional_env("HIS_API_MAX_RETRIES", "2")),
         retry_backoff_seconds=float(_optional_env("HIS_API_RETRY_BACKOFF_SECONDS", "0.75")),
