@@ -267,18 +267,29 @@ class HospitalAgent(Agent):
         except ValueError:
             return f"Invalid intent '{intent}'. Ask the caller to clarify what they need."
         self.state._set(self.state.fsm.set_intent(self.state.ctx, parsed))
+        if self.state.ctx.state == CallState.COLLECT_MOBILE:
+            return (
+                f"Intent set to {parsed.value}. Ask the caller for their mobile number. "
+                "After they give it, ask for their national ID or Iqama number. "
+                "Only call verify_patient_identity once you have both."
+            )
         return f"Intent set to {parsed.value}. Proceed to the next required step."
 
     @function_tool()
     async def verify_patient_identity(
-        self, run_ctx: RunContext, mobile_number: str, national_id: Optional[str] = None
+        self, run_ctx: RunContext, mobile_number: str, national_id: str
     ) -> str:
-        """Verify a registered patient by mobile number against the HIS.
+        """Verify a registered patient against the HIS using BOTH their mobile
+        number and their national ID / Iqama number.
+
+        Do NOT call this tool until the caller has spoken both values. Ask for
+        the mobile number first, then ask for the national ID / Iqama number
+        as a separate question, then call this tool with both.
 
         Args:
             mobile_number: Caller's mobile number, digits only or with +966/0 prefix.
-            national_id: Optional national ID / Iqama, used to disambiguate
-                if multiple patient records share a mobile number.
+            national_id: Caller's national ID or Iqama number, exactly as spoken
+                by the caller. Never guess or leave this empty.
         """
         if await self.state.guard_emergency(mobile_number):
             return "EMERGENCY DETECTED. Escalating to a human receptionist immediately."
@@ -289,9 +300,22 @@ class HospitalAgent(Agent):
                 "That doesn't look like a valid Saudi mobile number. "
                 "Ask the caller to repeat their 10-digit mobile number."
             )
-        logger.info("Starting patient verification. state=%s",self.state.ctx.state.value,)
 
-        new_ctx = await self.state.fsm.verify_patient(self.state.ctx, cleaned, national_id)
+        cleaned_national_id = re.sub(r"\D", "", national_id or "")
+        if not cleaned_national_id:
+            logger.info(
+                "Verification deferred: national ID not yet collected. state=%s",
+                self.state.ctx.state.value,
+            )
+            return (
+                "National ID not collected yet. Do not verify yet. Ask the caller "
+                "for their national ID or Iqama number, then call "
+                "verify_patient_identity again with both values."
+            )
+
+        logger.info("Starting patient verification. state=%s", self.state.ctx.state.value)
+
+        new_ctx = await self.state.fsm.verify_patient(self.state.ctx, cleaned, cleaned_national_id)
         self.state._set(new_ctx)
 
         if new_ctx.is_escalated:
@@ -300,7 +324,8 @@ class HospitalAgent(Agent):
             return (
                 f"No matching patient record found (attempt "
                 f"{new_ctx.verification_attempts}/{LIMITS.max_verification_attempts}). "
-                "Ask the caller to double-check their mobile number, or offer new patient registration."
+                "Ask the caller to double-check their mobile number and national ID, "
+                "or offer new patient registration."
             )
         return f"Patient verified: {new_ctx.patient_name}. Proceed with the requested flow."
 
