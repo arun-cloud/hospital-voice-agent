@@ -313,33 +313,44 @@ LLM_SETTINGS = LLMSettings()
 
 
 # --------------------------------------------------------------------------- #
-# TTS voice configuration (Cartesia Sonic 3.5)
+# TTS voice configuration 
 # --------------------------------------------------------------------------- #
 
 @dataclass(frozen=True)
 class TTSVoiceConfig:
+    model: str
     voice_id: str
     language: str
-    speed: str = "normal"
+    speed: float | str = 1.0
 
 
 TTS_VOICES: dict[Language, TTSVoiceConfig] = {
+    # Shifted to Fish Audio S2.1 Pro 
     Language.ENGLISH: TTSVoiceConfig(
-        voice_id=_optional_env("CARTESIA_VOICE_ID_EN", "a0e99841-438c-4a64-b679-ae501e7d6091"),
+        model="fishaudio/drama-3",
+        voice_id=_optional_env("FISHAUDIO_VOICE_ID_EN", "b347db033a6549378b48d00acb0d06cd"),
         language="en",
+        speed=1.0,
     ),
     Language.ARABIC: TTSVoiceConfig(
-        voice_id=_optional_env("CARTESIA_VOICE_ID_AR_SA", "REPLACE_WITH_SAUDI_ARABIC_VOICE_ID"),
+        model="fishaudio/drama-3",
+        voice_id=_optional_env("FISHAUDIO_VOICE_ID_AR_SA", "5814f46c02f5486d9c72b31bd82217ba"),
         language="ar",
+        speed=1.0,
     ),
+    # Kept on Cartesia Sonic 3 (Fish Audio does not support Malayalam or Tamil)
     Language.MALAYALAM: TTSVoiceConfig(
-            voice_id=_optional_env("CARTESIA_VOICE_ID_ML", "b426013c-002b-4e89-8874-8cd20b68373a"),
-            language="ml",
-        ),
+        model="cartesia/sonic-3",
+        voice_id=_optional_env("CARTESIA_VOICE_ID_ML", "b426013c-002b-4e89-8874-8cd20b68373a"),
+        language="ml",
+        speed="normal",
+    ),
     Language.TAMIL: TTSVoiceConfig(
-            voice_id=_optional_env("CARTESIA_VOICE_ID_TA", "19f28c21-ae34-499f-b64a-f7b09cd9b516"),
-            language="ta",
-        ),
+        model="cartesia/sonic-3",
+        voice_id=_optional_env("CARTESIA_VOICE_ID_TA", "19f28c21-ae34-499f-b64a-f7b09cd9b516"),
+        language="ta",
+        speed="normal",
+    ),
 }
 
 

@@ -36,17 +36,19 @@ import truststore
 truststore.inject_into_ssl()
 
 
-from livekit import agents
+from livekit import agents 
 from livekit.agents import (
     Agent,
     AgentSession,
     JobContext,
+    RoomInputOptions,
     RunContext,
     WorkerOptions,
     cli,
+    room_io,
     function_tool,
 )
-from livekit.plugins import deepgram, cartesia, silero, openai as lk_openai
+from livekit.plugins import deepgram, cartesia, silero, openai as lk_openai,fishaudio , noise_cancellation  
 
 from config import (
     CallIntent,
@@ -218,7 +220,10 @@ class HospitalAgent(Agent):
         # Change TTS voice/language
         voice_config = TTS_VOICES[selected_language]
 
-        if self.session.tts is not None:
+        if isinstance(self.session.tts, fishaudio.TTS):
+            # Fish Audio voices are language-specific; no separate language option.
+            self.session.tts.update_options(voice_id=voice_config.voice_id)
+        elif self.session.tts is not None:
             self.session.tts.update_options(
                 language=voice_config.language,
                 voice=voice_config.voice_id,
@@ -314,6 +319,7 @@ class HospitalAgent(Agent):
             )
 
         logger.info("Starting patient verification. state=%s", self.state.ctx.state.value)
+        logger.info("Verifying patient: mobile_number=%s, national_id=%s", cleaned, cleaned_national_id)
 
         new_ctx = await self.state.fsm.verify_patient(self.state.ctx, cleaned, cleaned_national_id)
         self.state._set(new_ctx)
@@ -717,16 +723,41 @@ async def entrypoint(job_ctx: JobContext) -> None:
             " <- ".join(chain) or "none",
         )
 
-    tts_engine = cartesia.TTS(
-        voice=TTS_VOICES[initial_language].voice_id,
-        language=TTS_VOICES[initial_language].language,
-    )
+    def create_tts_engine(lang: Language) :
+        cfg = TTS_VOICES[lang]
 
+        # Use Fish Audio Plugin for English & Saudi Arabic
+        if cfg.model.startswith("fishaudio/"):
+            model_name = cfg.model.split("/", 1)[1]  # Extracts "drama-3" or "s2.1-pro"
+            return fishaudio.TTS(
+                model=model_name,
+                voice_id=cfg.voice_id,
+                speed=float(cfg.speed),
+                latency_mode="balanced",
+            )
+
+        # Fallback to Cartesia Plugin for Malayalam & Tamil
+        return cartesia.TTS(
+            model=model_name,
+            voice=cfg.voice_id,
+            language=cfg.language,
+        )
+
+
+    # tts_engine = cartesia.TTS(
+    #     voice=TTS_VOICES[initial_language].voice_id,
+    #     language=TTS_VOICES[initial_language].language,
+    # )
+
+    # Initialize at call start
+    tts_engine = create_tts_engine(initial_language)
+    
     vad_engine = silero.VAD.load(
         min_speech_duration=VAD_SETTINGS.min_speech_duration,
         min_silence_duration=VAD_SETTINGS.min_silence_duration,
         activation_threshold=VAD_SETTINGS.activation_threshold,
     )
+    
 
     agent = HospitalAgent(session_state, initial_language)
 
@@ -754,7 +785,9 @@ async def entrypoint(job_ctx: JobContext) -> None:
     
 
     try:
-        await session.start(agent=agent, room=job_ctx.room)
+        await session.start(agent=agent, room=job_ctx.room, room_input_options = RoomInputOptions(
+            noise_cancellation = noise_cancellation.BVC()
+        ))
         await session.generate_reply(
             instructions=(
                 f"Welcome the caller to {HOSPITAL_NAME}. "

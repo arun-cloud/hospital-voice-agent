@@ -220,7 +220,7 @@ class HISClient:
         return await self._request(
             "POST",
             "/api/v1/patients/verify",
-            json_body={"mobile": mobile, "national_id": national_id},
+            json_body={"mobile_number": mobile, "national_id": national_id},
         )
 
     # ------------------------------------------------------------------- #
