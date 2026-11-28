@@ -409,10 +409,13 @@ class HospitalAgent(Agent):
         if not new_ctx.offered_slots:
             return "No open slots found. Tell the caller and offer to try a different doctor or department."
 
-        lines = [
-            f"{i+1}) slot_id={s.slot_id} | Dr. {s.doctor_name} | {s.start_time} | {s.location}"
-            for i, s in enumerate(new_ctx.offered_slots)
-        ]
+        lines = []
+        for i, s in enumerate(new_ctx.offered_slots[:3]):
+            clean_name = (s.doctor_name or "").removeprefix("Dr.").removeprefix("Dr").strip()
+            doctor_label = f"Dr. {clean_name}" if clean_name else "the doctor"
+            lines.append(
+                f"{i+1}) slot_id={s.slot_id} | {doctor_label} | {s.start_time} | {s.location}"
+            )
         return "Offer these slots (max 3), spoken naturally as day/date/time:\n" + "\n".join(lines)
 
     @function_tool()
@@ -672,7 +675,7 @@ class HospitalAgent(Agent):
 async def entrypoint(job_ctx: JobContext) -> None:
     await job_ctx.connect()
 
-    his_client = HISClient()
+    his_client = await asyncio.to_thread(HISClient);
     session_state = HospitalCallSession(his_client)
 
     # Cleanup must happen when the LiveKit JOB ends,

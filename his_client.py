@@ -28,7 +28,11 @@ import asyncio
 import logging
 import time
 from dataclasses import dataclass, field
+from datetime import datetime, timedelta
 from typing import Any, Optional
+from zoneinfo import ZoneInfo
+
+RIYADH_TZ = ZoneInfo("Asia/Riyadh")
 
 import httpx
 
@@ -46,6 +50,43 @@ class HISUnavailableError(Exception):
     Callers (the FSM) should catch this and route to the escalation engine —
     do not attempt to recover from this inside business logic."""
 
+
+def _resolve_appointment_date(earliest: bool, date_from: Optional[str]) -> str:
+    if date_from:
+        return date_from[:10]
+    now_riyadh = datetime.now(RIYADH_TZ)
+    target_date = now_riyadh.date() if earliest else (now_riyadh + timedelta(days=1)).date()
+    return target_date.isoformat()
+
+def _normalize_slot(raw: Any) -> dict[str, Any] | None:
+    if not isinstance(raw, dict):
+        return None
+
+    slot_id = raw.get("slot_id") or raw.get("slotId") or raw.get("id")
+    start_time = (
+        raw.get("start_time")
+        or raw.get("startTime")
+        or raw.get("appointmentDate")
+        or raw.get("dateTime")
+    )
+    if not slot_id or not start_time:
+        return None
+
+    normalized: dict[str, Any] = {
+        "slot_id": str(slot_id),
+        "start_time": str(start_time),
+        "location": str(raw.get("location") or raw.get("clinicName") or ""),
+    }
+
+    doctor_id = raw.get("doctor_id") or raw.get("doctorId")
+    if doctor_id is not None:
+        normalized["doctor_id"] = str(doctor_id)
+
+    doctor_name = raw.get("doctor_name") or raw.get("doctorName")
+    if doctor_name:
+        normalized["doctor_name"] = str(doctor_name)
+
+    return normalized
 
 @dataclass
 class HISResult:
@@ -242,6 +283,8 @@ class HISClient:
             params={"patient_id": patient_id, "department_id": department_id},
         )
 
+   
+
     async def search_slots(
         self,
         doctor_id: str,
@@ -251,17 +294,34 @@ class HISClient:
         date_to: Optional[str] = None,
         max_results: int = 3,
     ) -> HISResult:
-        return await self._request(
+        appointment_date = _resolve_appointment_date(earliest, date_from)
+        result = await self._request(
             "GET",
             "/api/v1/slots/search",
             params={
                 "doctor_id": doctor_id,
-                "earliest": earliest,
-                "date_from": date_from,
-                "date_to": date_to,
-                "limit": max_results,
+                "appointmentDate": appointment_date,
             },
         )
+        if not result.ok or result.data is None:
+            return result
+
+        raw_data = result.data
+        raw_items = raw_data.get("slots", []) if isinstance(raw_data, dict) else raw_data
+        if not isinstance(raw_items, list):
+            raw_items = []
+
+        slots = [
+            slot for item in raw_items if (slot := _normalize_slot(item)) is not None
+        ]
+        result.data = {
+            "slots": slots,
+            "count": len(slots),
+        }
+        return result
+    
+    
+    
 
     async def hold_slot(self, slot_id: str, patient_id: str) -> HISResult:
         """Places a short-lived hold on a slot so it can't be double-booked

@@ -235,6 +235,7 @@ class HospitalFSM:
         self, ctx: CallContext, *, earliest: bool = True
     ) -> CallContext:
         target_doctor_id = ctx.doctor_id
+        selected_doctor_name = ctx.doctor_name or ""
 
         try:
             if ctx.doctor_selection_mode == DoctorSelectionMode.EARLIEST_AVAILABLE and not target_doctor_id:
@@ -246,7 +247,18 @@ class HospitalFSM:
                 doctors = doctors_result.data.get("doctors", [])
                 if not doctors:
                     return ctx.evolve(offered_slots=tuple(), state=CallState.SELECT_DEPARTMENT)
-                target_doctor_id = doctors[0]["doctor_id"]
+                first_doctor = doctors[0]
+                target_doctor_id = first_doctor.get("doctor_id")
+                
+                if not target_doctor_id:
+                    return await self._escalate(
+                        ctx,
+                        EscalationSignal.his_api_unavailable("Doctor record missing doctor_id"),
+                    )
+                selected_doctor_name = first_doctor.get("doctor_name") or selected_doctor_name
+
+                if not target_doctor_id:
+                    return ctx.evolve(offered_slots=tuple(), state=CallState.SELECT_DOCTOR)
 
             result = await self._his.search_slots(
                 target_doctor_id, earliest=earliest, max_results=LIMITS.max_slot_offers
@@ -258,22 +270,34 @@ class HospitalFSM:
             return ctx.evolve(offered_slots=tuple(), state=CallState.SELECT_DOCTOR)
 
         raw_slots = (result.data or {}).get("slots", [])[: LIMITS.max_slot_offers]
-        slots = tuple(
-            SlotOption(
-                slot_id=s["slot_id"],
-                doctor_id=s.get("doctor_id", target_doctor_id),
-                doctor_name=s.get("doctor_name", ctx.doctor_name or ""),
-                department=ctx.department_name or "",
-                start_time=s["start_time"],
-                location=s.get("location", ""),
+        slots: list[SlotOption] = []
+        for s in raw_slots: 
+            if not isinstance(s, dict):
+                continue
+
+            slot_id = s.get("slot_id") or s.get("id")
+            start_time = s.get("start_time") or s.get("startTime")
+            
+            if not slot_id or not start_time:
+                continue
+
+            slots.append(
+                SlotOption(
+                    slot_id=str(slot_id),
+                    doctor_id=str(s.get("doctor_id") or target_doctor_id),
+                    doctor_name=str(s.get("doctor_name") or selected_doctor_name),
+                    department=ctx.department_name or "",
+                    start_time=str(start_time),
+                    location=str(s.get("location") or ""),
+                )
             )
-            for s in raw_slots
-        )
+        offered = tuple(slots)
+       
 
         return ctx.evolve(
             doctor_id=target_doctor_id,
-            offered_slots=slots,
-            state=CallState.OFFER_SLOTS if slots else CallState.SELECT_DOCTOR,
+            offered_slots=offered,
+            state=CallState.OFFER_SLOTS if offered else CallState.SELECT_DOCTOR,
         )
 
     async def hold_selected_slot(self, ctx: CallContext, slot_id: str) -> CallContext:
